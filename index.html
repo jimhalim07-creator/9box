@@ -404,7 +404,15 @@
   svg.chart text{ font-family:var(--font-body); fill:var(--ink-2); font-size:11.5px; }
   svg.chart text.muted{ fill:var(--ink-3); }
   svg.chart text.val{ font-weight:600; fill:var(--ink-2); }
-  svg.chart .cell-label{ font-size:10.5px; font-weight:600; fill:var(--ink-2); stroke:var(--soft); stroke-width:4px; paint-order:stroke; stroke-linejoin:round; }
+  svg.chart .cell-label{ font-size:12.5px; font-weight:700; fill:var(--ink); stroke:var(--soft); stroke-width:4px; paint-order:stroke; stroke-linejoin:round; }
+  svg.chart .cell-count{ font-family:var(--font-display); font-style:italic; font-size:26px; font-weight:400; fill:color-mix(in srgb, var(--c) 70%, var(--ink)); }
+  svg.chart .cell-label.sm{ font-size:10px; stroke-width:3px; }
+  svg.chart .cell-count.sm{ font-size:19px; }
+  svg.chart .ax-main{ font-size:12.5px; font-weight:700; fill:var(--ink); }
+  svg.chart .ax-title{ font-size:11px; font-weight:700; letter-spacing:.09em; text-transform:uppercase; fill:var(--ink-3); }
+  svg.chart .dot-ini{ font-size:9.5px; font-weight:700; fill:#fff; pointer-events:none; }
+  svg.chart .dot-ini.dk{ fill:#10201b; }
+  svg.chart.center{ margin:0 auto; }
   .ch-grid{ stroke:var(--line); stroke-width:1; }
   .ch-base{ stroke:var(--line-2); stroke-width:1; }
   .ch-ref{ stroke:var(--gold); stroke-width:1.5; stroke-dasharray:4 4; }
@@ -415,9 +423,9 @@
   .c-perf{ fill:var(--perf); stroke:var(--surface-solid); stroke-width:2; }
   .c-commit{ fill:var(--commit); stroke:var(--surface-solid); stroke-width:2; }
   .bar-perf{ fill:var(--perf); } .bar-commit{ fill:var(--commit); }
-  .cell{ fill:var(--soft); opacity:.85; }
+  .cell{ fill:color-mix(in srgb, var(--soft) 82%, var(--surface-solid)); stroke:color-mix(in srgb, var(--c) 55%, transparent); stroke-width:1.5; }
   .dot{ fill:var(--c); stroke:var(--surface-solid); stroke-width:2; cursor:pointer; transition:r .2s var(--spring); }
-  .dot:hover, .dot:focus-visible{ r:9; outline:none; }
+  .dot:hover, .dot:focus-visible{ stroke:var(--ink); stroke-width:3; outline:none; }
   .hists{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:22px; }
   @media (max-width:760px){ .hists{ grid-template-columns:minmax(0,1fr); } }
   .hist-h{ display:flex; align-items:center; gap:8px; font-family:var(--font-body); font-size:13px; font-weight:700; margin:0 0 6px; }
@@ -561,16 +569,16 @@
         <div id="insMix"></div>
         <p class="help" id="capNote"></p>
       </section>
-      <section class="card" aria-label="Average ratings by group">
+      <section class="card wide" aria-label="Average ratings by group">
         <div class="card-head"><h2>Average <em>ratings</em></h2></div>
         <div class="legend"><span><span class="sw sw-perf"></span>Performance</span><span><span class="sw sw-commit"></span>Commitment</span><span class="gold-key">3.5 fully meets</span></div>
         <div id="dotHost"></div>
       </section>
-      <section class="card" aria-label="Every colleague on the grid">
+      <section class="card wide" aria-label="Every colleague on the grid">
         <div class="card-head"><h2>Everyone, <em>one dot each</em></h2></div>
         <div class="legend" id="legend3"></div>
         <div id="scatterHost"></div>
-        <p class="help">Each dot is a colleague, placed by their two ratings. Select a dot to open their card.</p>
+        <p class="help">Each dot is a colleague, placed inside their box by their two ratings. Dots are nudged apart slightly so nobody hides behind a neighbour; hover for the exact scores and select a dot to open their card. The dashed gold lines mark 3.5, fully meets.</p>
       </section>
       <section class="card wide" aria-label="How ratings are spread">
         <div class="card-head"><h2>How the ratings are <em>spread</em></h2></div>
@@ -1056,44 +1064,98 @@
     host.innerHTML = s;
   }
 
+  function wrapWords(text, maxChars, maxLines){
+    var tokens = [];
+    String(text).split(' ').forEach(function(w){ var p = w.split('-'); p.forEach(function(x, i){ tokens.push(i < p.length - 1 ? x + '-' : x); }); });
+    var lines = [], cur = '';
+    tokens.forEach(function(t){
+      var joined = cur ? (cur.slice(-1) === '-' ? cur + t : cur + ' ' + t) : t;
+      if (cur && joined.length > maxChars){ lines.push(cur); cur = t; } else cur = joined;
+    });
+    if (cur) lines.push(cur);
+    return lines.slice(0, maxLines || 2);
+  }
   function renderScatter(list){
     var host = $('scatterHost');
     $('legend3').innerHTML = legendTiers();
     if (!list.length){ host.innerHTML = emptyMsg(); return; }
-    var W = Math.max(300, host.clientWidth || 560), H = Math.round(Math.min(W * (W < 520 ? 0.95 : 0.8), 480)), mg = {l:46, r:14, t:14, b:46};
-    var mn = 5; list.forEach(function(m){ mn = Math.min(mn, scoreOf(m, 'perf'), scoreOf(m, 'commit')); });
-    var lo = Math.min(2, Math.floor(mn * 2) / 2), hi = 5, bd = bands();
-    function X(v){ return mg.l + (v - lo) / (hi - lo) * (W - mg.l - mg.r); }
-    function Y(v){ return H - mg.b - (v - lo) / (hi - lo) * (H - mg.t - mg.b); }
-    var c1 = Math.min(hi, Math.max(lo, bd.low)), c2 = Math.min(hi, Math.max(c1, bd.high)), cuts = [lo, c1, c2, hi];
-    var s = '<svg class="chart" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Scatter of performance against commitment, one dot per colleague">';
-    var labels = '';
-    [1, 2, 3].forEach(function(pl){
-      [1, 2, 3].forEach(function(cl){
-        var b = BOXES.filter(function(x){ return x.perf === pl && x.commit === cl; })[0];
-        var x0 = X(cuts[pl - 1]), x1 = X(cuts[pl]), y0 = Y(cuts[cl]), y1 = Y(cuts[cl - 1]);
-        if (x1 - x0 < 2 || y1 - y0 < 2) return;
-        s += '<rect class="cell t-' + b.tier + '" x="' + (x0 + 1).toFixed(1) + '" y="' + (y0 + 1).toFixed(1) + '" width="' + (x1 - x0 - 2).toFixed(1) + '" height="' + (y1 - y0 - 2).toFixed(1) + '" rx="10"/>';
-        if (x1 - x0 > 118 && y1 - y0 > 34) labels += '<text class="cell-label t-' + b.tier + '" x="' + (x0 + 10).toFixed(1) + '" y="' + (y0 + 20).toFixed(1) + '">' + esc(b.title) + '</text>';
-      });
-    });
-    for (var t = lo; t <= hi + 0.001; t += 0.5){
-      var isInt = Math.abs(t - Math.round(t)) < 0.001;
-      if (isInt || W >= 460){
-        s += '<text class="muted" x="' + X(t).toFixed(1) + '" y="' + (H - mg.b + 16) + '" text-anchor="middle">' + fmt(t) + '</text>';
-        s += '<text class="muted" x="' + (mg.l - 9) + '" y="' + (Y(t) + 4).toFixed(1) + '" text-anchor="end">' + fmt(t) + '</text>';
-      }
+    var bd = bands(), W = Math.max(300, Math.min(host.clientWidth || 640, 1040)), small = W < 520;
+    var ml = small ? 28 : 104, mr = 2, mt = 4, mb = small ? 54 : 62, gap = small ? 5 : 10;
+    var cw = (W - ml - mr - 2 * gap) / 3, ch = small ? 132 : Math.min(190, Math.max(150, cw * 0.55));
+    var H = Math.round(mt + 3 * ch + 2 * gap + mb);
+    function cx0(pl){ return ml + (pl - 1) * (cw + gap); }
+    function cy0(cl){ return mt + (3 - cl) * (ch + gap); }
+    // how many colleagues per box, to size the dots
+    var perBox = {}, maxN = 1;
+    list.forEach(function(m){ var b = boxFor(m); perBox[b.key] = (perBox[b.key] || 0) + 1; maxN = Math.max(maxN, perBox[b.key]); });
+    var r = small ? 7 : (maxN <= 14 ? 12 : maxN <= 28 ? 10 : 8), showIni = r >= 10;
+    var padX = r + 4, padT = small ? 50 : 40, padB = r + (small ? 16 : 6);
+    function frac(score, level){
+      var a = level === 1 ? 1 : level === 2 ? bd.low : bd.high, z = level === 1 ? bd.low : level === 2 ? bd.high : 5;
+      return Math.min(1, Math.max(0, (score - a) / (z - a)));
     }
-    s += '<line class="ch-ref" x1="' + X(FULLY_MEETS).toFixed(1) + '" x2="' + X(FULLY_MEETS).toFixed(1) + '" y1="' + mg.t + '" y2="' + (H - mg.b) + '"/>';
-    s += '<line class="ch-ref" y1="' + Y(FULLY_MEETS).toFixed(1) + '" y2="' + Y(FULLY_MEETS).toFixed(1) + '" x1="' + mg.l + '" x2="' + (W - mg.r) + '"/>';
-    s += labels;
-    s += '<text x="' + (mg.l + (W - mg.l - mg.r) / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">Performance rating (out of 5)</text>';
-    s += '<text x="12" y="' + (mg.t + (H - mg.t - mg.b) / 2).toFixed(1) + '" text-anchor="middle" transform="rotate(-90 12 ' + (mg.t + (H - mg.t - mg.b) / 2).toFixed(1) + ')">Commitment rating (out of 5)</text>';
-    var r = W < 420 ? 5 : 6.5;
-    list.forEach(function(m){
+    // place each dot by its scores inside its own box, then nudge neighbours apart so nobody hides behind anyone
+    var groups = {};
+    list.forEach(function(m, i){
       var p = scoreOf(m, 'perf'), q = scoreOf(m, 'commit'), b = boxFor(m);
-      var tip = m.name + ' · ' + deptOf(m) + ' · Performance ' + fmt(p) + ' · Commitment ' + fmt(q);
-      s += '<circle class="dot t-' + b.tier + '" cx="' + X(p).toFixed(1) + '" cy="' + Y(q).toFixed(1) + '" r="' + r + '" data-id="' + esc(m.id) + '" data-tip="' + esc(tip) + '" tabindex="0" role="button" aria-label="' + esc(tip) + '"/>';
+      var x = cx0(b.perf) + padX + frac(p, b.perf) * (cw - 2 * padX), y = cy0(b.commit) + ch - padB - frac(q, b.commit) * (ch - padT - padB);
+      (groups[b.key] = groups[b.key] || []).push({m:m, b:b, x:x, y:y, p:p, q:q, i:i});
+    });
+    var pts = [];
+    Object.keys(groups).forEach(function(k){
+      var g = groups[k], b = g[0].b, minD = 2 * r + 3, it, a, c;
+      var xl = cx0(b.perf) + padX, xr = cx0(b.perf) + cw - padX, yt = cy0(b.commit) + padT, yb = cy0(b.commit) + ch - padB;
+      for (it = 0; it < 90; it++){
+        for (a = 0; a < g.length; a++){
+          for (c = a + 1; c < g.length; c++){
+            var dx = g[c].x - g[a].x, dy = g[c].y - g[a].y, d = Math.sqrt(dx * dx + dy * dy);
+            if (d < minD){
+              if (d < 0.01){ dx = (a % 2 ? 1 : -1); dy = (c % 3 - 1) || 1; d = Math.sqrt(dx * dx + dy * dy); }
+              var push = (minD - d) / 2, ux = dx / d, uy = dy / d;
+              g[a].x -= ux * push; g[a].y -= uy * push; g[c].x += ux * push; g[c].y += uy * push;
+            }
+          }
+        }
+        g.forEach(function(o){ o.x = Math.min(xr, Math.max(xl, o.x)); o.y = Math.min(yb, Math.max(yt, o.y)); });
+      }
+      pts = pts.concat(g);
+    });
+    var s = '<svg class="chart center" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="The nine boxes with one dot per colleague, placed by performance and commitment rating">';
+    // the nine boxes
+    BOXES.forEach(function(b){
+      var x = cx0(b.perf), y = cy0(b.commit), n = perBox[b.key] || 0;
+      var tip = b.title + ' · ' + n + (n === 1 ? ' person' : ' people') + ' · Performance ' + bandRange(b.perf) + ' · Commitment ' + bandRange(b.commit);
+      s += '<rect class="cell t-' + b.tier + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch + '" rx="18" data-tip="' + esc(tip) + '"/>';
+    });
+    // 3.5 guides, behind the dots
+    var x35 = cx0(2) + padX + frac(FULLY_MEETS, 2) * (cw - 2 * padX), y35 = cy0(2) + ch - padB - frac(FULLY_MEETS, 2) * (ch - padT - padB);
+    s += '<line class="ch-ref" x1="' + x35.toFixed(1) + '" x2="' + x35.toFixed(1) + '" y1="' + (cy0(3) + 6) + '" y2="' + (cy0(1) + ch - 6) + '"/>';
+    s += '<line class="ch-ref" y1="' + y35.toFixed(1) + '" y2="' + y35.toFixed(1) + '" x1="' + (cx0(1) + 6) + '" x2="' + (cx0(3) + cw - 6) + '"/>';
+    // titles and counts
+    BOXES.forEach(function(b){
+      var x = cx0(b.perf), y = cy0(b.commit), n = perBox[b.key] || 0, lines = wrapWords(b.title, small ? Math.max(6, Math.floor((cw - 12) / 5.4)) : Math.max(8, Math.floor((cw - 56) / 6.4)), small ? 3 : 2);
+      lines.forEach(function(l, i){ s += '<text class="cell-label t-' + b.tier + (small ? ' sm' : '') + '" x="' + (x + (small ? 7 : 14)).toFixed(1) + '" y="' + (y + (small ? 15 + i * 11 : 24 + i * 14)) + '">' + esc(l) + '</text>'; });
+      if (small) s += '<text class="cell-count sm t-' + b.tier + '" x="' + (x + cw - 7).toFixed(1) + '" y="' + (y + ch - 7) + '" text-anchor="end">' + n + '</text>';
+      else s += '<text class="cell-count t-' + b.tier + '" x="' + (x + cw - 14).toFixed(1) + '" y="' + (y + 28) + '" text-anchor="end">' + n + '</text>';
+    });
+    // axis labels that line up with the boxes
+    [1, 2, 3].forEach(function(l){
+      var cxm = cx0(l) + cw / 2, ym = cy0(l) + ch / 2, by = mt + 3 * ch + 2 * gap;
+      s += '<text class="ax-main" x="' + cxm.toFixed(1) + '" y="' + (by + 18) + '" text-anchor="middle">' + LEVEL[l] + '</text>';
+      s += '<text class="muted" x="' + cxm.toFixed(1) + '" y="' + (by + 33) + '" text-anchor="middle">' + esc(bandRange(l)) + '</text>';
+      if (small) s += '<text class="ax-main" transform="translate(' + (ml - 12) + ' ' + ym.toFixed(1) + ') rotate(-90)" text-anchor="middle">' + LEVEL[l] + '</text>';
+      else {
+        s += '<text class="ax-main" x="' + (ml - 12) + '" y="' + (cy0(l) + ch / 2 - 2).toFixed(1) + '" text-anchor="end">' + LEVEL[l] + '</text>';
+        s += '<text class="muted" x="' + (ml - 12) + '" y="' + (cy0(l) + ch / 2 + 13).toFixed(1) + '" text-anchor="end">' + esc(bandRange(l)) + '</text>';
+      }
+    });
+    s += '<text class="ax-title" x="' + (ml + (W - ml - mr) / 2).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">Performance rating →</text>';
+    if (!small) s += '<text class="ax-title" transform="translate(12 ' + (mt + (3 * ch + 2 * gap) / 2).toFixed(1) + ') rotate(-90)" text-anchor="middle">Commitment rating →</text>';
+    // the dots
+    pts.sort(function(a, b){ return a.y - b.y; }).forEach(function(o){
+      var tip = o.m.name + ' · ' + deptOf(o.m) + ' · Performance ' + fmt(o.p) + ' · Commitment ' + fmt(o.q);
+      s += '<circle class="dot t-' + o.b.tier + '" cx="' + o.x.toFixed(1) + '" cy="' + o.y.toFixed(1) + '" r="' + r + '" data-id="' + esc(o.m.id) + '" data-tip="' + esc(tip) + '" tabindex="0" role="button" aria-label="' + esc(tip) + '"/>';
+      if (showIni) s += '<text class="dot-ini' + (o.b.tier === 'role' || o.b.tier === 'watch' ? ' dk' : '') + '" x="' + o.x.toFixed(1) + '" y="' + (o.y + 3.4).toFixed(1) + '" text-anchor="middle">' + esc(initials(o.m.name)) + '</text>';
     });
     host.innerHTML = s + '</svg>';
   }
