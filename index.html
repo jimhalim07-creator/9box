@@ -437,6 +437,8 @@
   tr.grp.on td{ background:var(--surface-2); }
   tr.grp td:first-child{ font-weight:600; max-width:240px; overflow:hidden; text-overflow:ellipsis; }
   .tiny{ font-weight:500; color:var(--ink-3); font-size:11.5px; margin-left:6px; }
+  .chk{ display:flex; align-items:center; gap:9px; font-size:13px; color:var(--ink-2); cursor:pointer; }
+  .chk input{ width:16px; height:16px; accent-color:var(--accent); }
   .two.two-w{ grid-template-columns:minmax(0,1fr) minmax(0,1.8fr); }
   .upload{ display:flex; flex-wrap:wrap; gap:8px 12px; align-items:center; }
   .upload input[type=file]{ font-size:12.5px; max-width:100%; }
@@ -535,7 +537,7 @@
   <details class="guide">
     <summary>How the grid reads your appraisal scores</summary>
     <div class="guide-body">
-      <p>Enter each colleague's appraisal ratings on the usual 1 to 5 scale, one for performance and one for commitment. On that scale 3.5 means fully meets requirements. The grid turns each score into Low, Medium or High and places the person for you.</p>
+      <p>Enter each colleague's appraisal ratings on the usual 1 to 5 scale, one for performance and one for commitment. On that scale <span class="fm-val"></span> means fully meets requirements (you can change this under Scoring bands). The grid turns each score into Low, Medium or High and places the person for you.</p>
       <p id="guideBands"></p>
       <p><b>Performance</b> looks back at how well someone delivered against their goals and role expectations this cycle. <b>Commitment</b> looks at alignment: how strongly someone lives CARE's mission and values, and how reliable and trustworthy they are, whatever their output this cycle.</p>
       <p>Open any box title to see what it means and what a manager and HR should do about it. The four tiers group the nine boxes for quick scanning.</p>
@@ -571,14 +573,14 @@
       </section>
       <section class="card wide" aria-label="Average ratings by group">
         <div class="card-head"><h2>Average <em>ratings</em></h2></div>
-        <div class="legend"><span><span class="sw sw-perf"></span>Performance</span><span><span class="sw sw-commit"></span>Commitment</span><span class="gold-key">3.5 fully meets</span></div>
+        <div class="legend"><span><span class="sw sw-perf"></span>Performance</span><span><span class="sw sw-commit"></span>Commitment</span><span class="gold-key"><span class="fm-val"></span> fully meets</span></div>
         <div id="dotHost"></div>
       </section>
       <section class="card wide" aria-label="Every colleague on the grid">
         <div class="card-head"><h2>Everyone, <em>one dot each</em></h2></div>
         <div class="legend" id="legend3"></div>
         <div id="scatterHost"></div>
-        <p class="help">Each dot is a colleague, placed inside their box by their two ratings. Dots are nudged apart slightly so nobody hides behind a neighbour; hover for the exact scores and select a dot to open their card. The dashed gold lines mark 3.5, fully meets.</p>
+        <p class="help">Each dot is a colleague, placed inside their box by their two ratings. Dots are nudged apart slightly so nobody hides behind a neighbour; hover for the exact scores and select a dot to open their card. The dashed gold lines mark <span class="fm-val"></span>, fully meets.</p>
       </section>
       <section class="card wide" aria-label="How ratings are spread">
         <div class="card-head"><h2>How the ratings are <em>spread</em></h2></div>
@@ -586,7 +588,7 @@
           <div><h3 class="hist-h"><span class="sw sw-perf"></span>Performance<small id="histPAvg"></small></h3><div id="histP"></div></div>
           <div><h3 class="hist-h"><span class="sw sw-commit"></span>Commitment<small id="histCAvg"></small></h3><div id="histC"></div></div>
         </div>
-        <p class="help">Number of colleagues in each half-point step. The gold line marks 3.5, fully meets requirements.</p>
+        <p class="help">Number of colleagues in each half-point step. The gold line marks <span class="fm-val"></span>, fully meets requirements.</p>
       </section>
       <section class="card wide" aria-label="Group table">
         <div class="card-head"><h2>The same numbers, <em>as a table</em></h2></div>
@@ -614,7 +616,6 @@
     support: {label:'Needs Support',  sub:'Struggling on delivery and engagement. Act this cycle', color:'#e66767'}
   };
   var LEVEL = {1:'Low', 2:'Medium', 3:'High'};
-  var FULLY_MEETS = 3.5;
   var DEFAULT_BANDS = {low:3.0, high:4.0};
   var LEGACY_SCORE = {1:2.0, 2:3.5, 3:4.5}; // rows saved before 1-5 scoring: Low, Medium, High
 
@@ -675,7 +676,7 @@
   var viewerName = '';
   var loaded = false, readOnly = false, previewMode = false, firstRenderDone = false;
   var members = [];
-  var config = {orgName:'', cycle:'', bandLow:DEFAULT_BANDS.low, bandHigh:DEFAULT_BANDS.high};
+  var config = {orgName:'', cycle:'', bandLow:DEFAULT_BANDS.low, bandHigh:DEFAULT_BANDS.high, fmMode:'auto', fullyMeets:3.5};
   var filters = {dept:'All', grade:'All', title:'All', tier:null, q:''};
   var view = 'grid', groupBy = 'dept', mixMode = 'share', insAnimated = false;
   var chartAsTable = false;
@@ -692,6 +693,12 @@
   }
 
   // ---------- scoring ----------
+  // "Fully meets requirements": by default the middle of the Medium band, or a value you set yourself under Scoring bands
+  function FM(){
+    if (config.fmMode === 'manual'){ var v = Number(config.fullyMeets); if (v >= 1 && v <= 5) return Math.round(v * 100) / 100; }
+    var b = bands(); return Math.round((b.low + b.high) / 2 * 100) / 100;
+  }
+  function fmTxt(){ return fmt(FM()); }
   function bands(){
     var lo = Number(config.bandLow), hi = Number(config.bandHigh);
     if (!(lo > 1 && hi > lo && hi <= 5)) return {low:DEFAULT_BANDS.low, high:DEFAULT_BANDS.high};
@@ -718,7 +725,7 @@
     return null;
   }
   function scoreWord(s){
-    if (Math.abs(s - FULLY_MEETS) < 0.001) return 'Fully meets requirements';
+    if (Math.abs(s - FM()) < 0.001) return 'Fully meets requirements';
     var l = levelOf(s);
     return l === 1 ? 'Below the bar' : l === 2 ? 'Meets the bar' : 'Above the bar';
   }
@@ -855,8 +862,9 @@
     [3,2,1].forEach(function(l){ rl += '<div>' + LEVEL[l] + '<small>' + esc(bandRange(l)) + '</small></div>'; });
     [1,2,3].forEach(function(l){ cl += '<div>' + LEVEL[l] + '<small>' + esc(bandRange(l)) + '</small></div>'; });
     $('rowlabels').innerHTML = rl; $('collabels').innerHTML = cl;
+    Array.prototype.forEach.call(document.querySelectorAll('.fm-val'), function(el){ el.textContent = fmTxt(); });
     var b = bands();
-    $('caption').innerHTML = 'Placed automatically from appraisal scores out of 5. Medium starts at ' + fmt(b.low) + ' and High at ' + fmt(b.high) + ', so 3.5 (fully meets) sits in the middle. <button type="button" class="link-btn" id="capBands">Change the bands</button>';
+    $('caption').innerHTML = 'Placed automatically from appraisal scores out of 5. Medium starts at ' + fmt(b.low) + ' and High at ' + fmt(b.high) + ', so ' + fmTxt() + ' (fully meets) sits in ' + LEVEL[levelOf(FM())] + '. <button type="button" class="link-btn" id="capBands">Change the bands</button>';
     $('capBands').onclick = openBands;
     $('guideBands').textContent = 'Right now a score under ' + fmt(b.low) + ' is Low, ' + fmt(b.low) + ' up to ' + fmt(b.high) + ' is Medium, and ' + fmt(b.high) + ' or more is High. You can change these cut-offs under Scoring bands.';
   }
@@ -976,12 +984,12 @@
 
   function renderKpis(list){
     var n = list.length, sp = 0, sc = 0, both = 0, c = tierCounts(list);
-    list.forEach(function(m){ var p = scoreOf(m, 'perf'), q = scoreOf(m, 'commit'); sp += p; sc += q; if (p >= FULLY_MEETS && q >= FULLY_MEETS) both++; });
+    list.forEach(function(m){ var p = scoreOf(m, 'perf'), q = scoreOf(m, 'commit'); sp += p; sc += q; if (p >= FM() && q >= FM()) both++; });
     var tiles = [
       ['Colleagues', String(n), 'in the current view', 'var(--accent)'],
-      ['Average performance', n ? f1(sp / n) : '–', 'out of 5 · 3.5 fully meets', 'var(--perf)'],
-      ['Average commitment', n ? f1(sc / n) : '–', 'out of 5 · 3.5 fully meets', 'var(--commit)'],
-      ['Meet the bar on both', n ? pctOf(both, n) + '%' : '–', both + ' of ' + n + ' rate 3.5 or higher on both', 'var(--role)'],
+      ['Average performance', n ? f1(sp / n) : '–', 'out of 5 · ' + fmTxt() + ' fully meets', 'var(--perf)'],
+      ['Average commitment', n ? f1(sc / n) : '–', 'out of 5 · ' + fmTxt() + ' fully meets', 'var(--commit)'],
+      ['Meet the bar on both', n ? pctOf(both, n) + '%' : '–', both + ' of ' + n + ' rate ' + fmTxt() + ' or higher on both', 'var(--role)'],
       ['Need attention', n ? pctOf(c.watch + c.support, n) + '%' : '–', c.watch + ' on values watch · ' + c.support + ' needing support', 'var(--support)']
     ];
     $('kpis').innerHTML = tiles.map(function(t){
@@ -995,8 +1003,8 @@
     var rows = groupRows(groupBy).filter(function(r){ return r.name !== 'Not set' && r.name !== 'Unassigned'; });
     var r2 = rows.filter(function(r){ return r.total >= 2; }), r3 = rows.filter(function(r){ return r.total >= 3; });
     var gl = DIMS[groupBy].label.toLowerCase(), both = 0;
-    list.forEach(function(m){ if (scoreOf(m, 'perf') >= FULLY_MEETS && scoreOf(m, 'commit') >= FULLY_MEETS) both++; });
-    out.push(pctOf(both, list.length) + '% of the colleagues in view (' + both + ' of ' + list.length + ') meet the 3.5 bar on both ratings.');
+    list.forEach(function(m){ if (scoreOf(m, 'perf') >= FM() && scoreOf(m, 'commit') >= FM()) both++; });
+    out.push(pctOf(both, list.length) + '% of the colleagues in view (' + both + ' of ' + list.length + ') meet the ' + fmTxt() + ' bar on both ratings.');
     if (r2.length > 1){
       var bs = r2.slice().sort(function(a, b){ return (b.ap + b.ac) - (a.ap + a.ac); }), top = bs[0], low = bs[bs.length - 1];
       out.push(top.name + ' leads by ' + gl + ', averaging ' + f1(top.ap) + ' for performance and ' + f1(top.ac) + ' for commitment.');
@@ -1040,7 +1048,7 @@
     if (!rows.length){ host.innerHTML = emptyMsg(); return; }
     var W = Math.max(300, host.clientWidth || 560), small = W < 520, L = small ? 112 : 168, R = 22, rowH = 34, top = 26, bot = 24;
     var vals = []; rows.forEach(function(r){ vals.push(r.ap, r.ac); });
-    var lo = Math.min(3, Math.max(1, Math.floor((Math.min.apply(null, vals) - 0.25) * 2) / 2)), hi = 5;
+    var lo = Math.min(Math.floor(FM()) , Math.max(1, Math.floor((Math.min.apply(null, vals) - 0.25) * 2) / 2)), hi = 5;
     var sorted = rows.slice().sort(function(a, b){ return (b.ap + b.ac) - (a.ap + a.ac); });
     var H = top + sorted.length * rowH + bot;
     function X(v){ return L + (v - lo) / (hi - lo) * (W - L - R); }
@@ -1050,7 +1058,7 @@
       s += '<line class="ch-grid" x1="' + X(t).toFixed(1) + '" x2="' + X(t).toFixed(1) + '" y1="' + (top - 6) + '" y2="' + (H - bot + 2) + '"/>';
       if (isInt || !small) s += '<text class="muted" x="' + X(t).toFixed(1) + '" y="' + (H - 6) + '" text-anchor="middle">' + fmt(t) + '</text>';
     }
-    s += '<line class="ch-ref" x1="' + X(FULLY_MEETS).toFixed(1) + '" x2="' + X(FULLY_MEETS).toFixed(1) + '" y1="' + (top - 10) + '" y2="' + (H - bot + 2) + '"/>';
+    s += '<line class="ch-ref" x1="' + X(FM()).toFixed(1) + '" x2="' + X(FM()).toFixed(1) + '" y1="' + (top - 10) + '" y2="' + (H - bot + 2) + '"/>';
     sorted.forEach(function(r, i){
       var cy = top + i * rowH + rowH / 2, on = filters[groupBy] === r.name;
       var tip = r.name + ' · ' + r.total + (r.total === 1 ? ' person' : ' people') + ' · Performance ' + f1(r.ap) + ' · Commitment ' + f1(r.ac);
@@ -1060,7 +1068,7 @@
       s += '<circle class="c-perf" cx="' + X(r.ap).toFixed(1) + '" cy="' + cy + '" r="6.5"/><circle class="c-commit" cx="' + X(r.ac).toFixed(1) + '" cy="' + cy + '" r="6.5"/>';
       s += '<rect class="ch-hit" x="0" y="' + (cy - rowH / 2) + '" width="' + W + '" height="' + rowH + '" rx="10" data-grp="' + esc(r.name) + '" data-tip="' + esc(tip) + '" tabindex="0" role="button" aria-label="' + esc(tip) + '"/>';
     });
-    s += '<text x="' + X(FULLY_MEETS).toFixed(1) + '" y="10" text-anchor="middle" class="muted">3.5 fully meets</text></svg>';
+    s += '<text x="' + X(FM()).toFixed(1) + '" y="10" text-anchor="middle" class="muted">' + fmTxt() + ' fully meets</text></svg>';
     host.innerHTML = s;
   }
 
@@ -1128,7 +1136,7 @@
       s += '<rect class="cell t-' + b.tier + '" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + cw.toFixed(1) + '" height="' + ch + '" rx="18" data-tip="' + esc(tip) + '"/>';
     });
     // 3.5 guides, behind the dots
-    var x35 = cx0(2) + padX + frac(FULLY_MEETS, 2) * (cw - 2 * padX), y35 = cy0(2) + ch - padB - frac(FULLY_MEETS, 2) * (ch - padT - padB);
+    var x35 = cx0(2) + padX + frac(FM(), 2) * (cw - 2 * padX), y35 = cy0(2) + ch - padB - frac(FM(), 2) * (ch - padT - padB);
     s += '<line class="ch-ref" x1="' + x35.toFixed(1) + '" x2="' + x35.toFixed(1) + '" y1="' + (cy0(3) + 6) + '" y2="' + (cy0(1) + ch - 6) + '"/>';
     s += '<line class="ch-ref" y1="' + y35.toFixed(1) + '" y2="' + y35.toFixed(1) + '" x1="' + (cx0(1) + 6) + '" x2="' + (cx0(3) + cw - 6) + '"/>';
     // titles and counts
@@ -1178,7 +1186,7 @@
       var tx = mg.l + i / 4 * (W - mg.l - mg.r);
       s += '<text class="muted" x="' + tx.toFixed(1) + '" y="' + (H - 6) + '" text-anchor="' + (i === 0 ? 'start' : i === 4 ? 'end' : 'middle') + '">' + (i + 1) + '</text>';
     }
-    var rx = mg.l + (FULLY_MEETS - 1) / 4 * (W - mg.l - mg.r);
+    var rx = mg.l + (FM() - 1) / 4 * (W - mg.l - mg.r);
     s += '<line class="ch-ref" x1="' + rx.toFixed(1) + '" x2="' + rx.toFixed(1) + '" y1="6" y2="' + (H - mg.b) + '"/>';
     return s + '</svg>';
   }
@@ -1223,7 +1231,7 @@
 
   function scoreHtml(id, label, value){
     var b = bands(), zl = ((b.low - 1) / 4 * 100).toFixed(2), zh = ((b.high - 1) / 4 * 100).toFixed(2);
-    var pm = (FULLY_MEETS - 1) / 4 * 100;
+    var pm = (FM() - 1) / 4 * 100;
     var left = 'calc(' + pm + '% + ' + (11 - pm * 0.22).toFixed(2) + 'px)';
     return '<div class="field"><span class="lab">' + label + '</span>' +
       '<div class="score" id="' + id + '">' +
@@ -1232,7 +1240,7 @@
       '<input class="score-field" type="number" id="' + id + 'In" min="1" max="5" step="0.05" inputmode="decimal" value="' + fmt(value) + '" aria-label="' + esc(label) + ' score out of 5"></div>' +
       '<div class="slider-wrap" id="' + id + 'Wrap" style="--zl:' + zl + '%;--zh:' + zh + '%">' +
       '<input type="range" id="' + id + 'Range" min="1" max="5" step="0.05" value="' + value + '" aria-label="' + esc(label) + ' slider">' +
-      '<span class="fm" style="left:' + left + '"></span><span class="fm-label" style="left:' + left + '">3.5 fully meets</span></div>' +
+      '<span class="fm" style="left:' + left + '"></span><span class="fm-label" style="left:' + left + '">' + fmTxt() + ' fully meets</span></div>' +
       '<div class="scale-ends"><span>1</span><span>5</span></div></div></div>';
   }
   function wireScore(id){
@@ -1253,7 +1261,7 @@
     rng.addEventListener('input', function(){ apply(parseFloat(rng.value), 'range'); });
     inp.addEventListener('input', function(){ var v = parseFloat(String(inp.value).replace(',', '.')); if (!isNaN(v) && v >= 1 && v <= 5) apply(v, 'input'); });
     inp.addEventListener('blur', function(){ var v = parseFloat(String(inp.value).replace(',', '.')); apply(isNaN(v) ? parseFloat($(id).getAttribute('data-value')) : v); });
-    apply(parseFloat($(id).getAttribute('data-value')) || 3.5);
+    apply(parseFloat($(id).getAttribute('data-value')) || FM());
   }
   function currentScores(){
     return {perf: parseFloat($('perfScore').getAttribute('data-value')), commit: parseFloat($('commitScore').getAttribute('data-value'))};
@@ -1270,8 +1278,8 @@
     function uniq(fn, extra){ var o = {}; (extra || []).forEach(function(v){ o[v] = 1; }); members.forEach(function(x){ var v = fn(x); if (v && v !== 'Not set' && v !== 'Unassigned') o[v] = 1; }); return Object.keys(o).sort(nat); }
     function opts(a){ return a.map(function(d){ return '<option value="' + esc(d) + '"></option>'; }).join(''); }
     var datalist = opts(uniq(deptOf, DEPT_SUGGESTIONS)), gradeList = opts(uniq(gradeOf)), titleList = opts(uniq(titleOf));
-    var p = m ? scoreOf(m, 'perf') : FULLY_MEETS, c = m ? scoreOf(m, 'commit') : FULLY_MEETS;
-    if (isNaN(p)) p = FULLY_MEETS; if (isNaN(c)) c = FULLY_MEETS;
+    var p = m ? scoreOf(m, 'perf') : FM(), c = m ? scoreOf(m, 'commit') : FM();
+    if (isNaN(p)) p = FM(); if (isNaN(c)) c = FM();
     showPanel(
       '<div class="panel-head"><h2>' + (m ? 'Edit ' + esc((m.name || '').split(' ')[0] || 'colleague') : 'Add a colleague') + '</h2><button type="button" class="x" id="pClose" aria-label="Close">×</button></div>' +
       '<form id="memberForm" class="panel-inner" novalidate>' +
@@ -1323,37 +1331,45 @@
   }
 
   function openBands(){
-    var b = bands();
+    var b = bands(), manual = config.fmMode === 'manual';
     panelState = {type:'bands'};
     showPanel(
       '<div class="panel-head"><h2>Scoring bands</h2><button type="button" class="x" id="pClose" aria-label="Close">×</button></div>' +
-      '<p class="help" style="font-size:13.5px;color:var(--ink-2)">Appraisal ratings run from 1 to 5, and 3.5 means fully meets requirements. These two cut-offs decide where a score lands, for both performance and commitment.</p>' +
+      '<p class="help" style="font-size:13.5px;color:var(--ink-2)">Appraisal ratings run from 1 to 5. Set where Medium and High start, and which score means fully meets requirements. These apply to both performance and commitment, and every chart and reference line follows them.</p>' +
       '<div id="bandViz"></div>' +
       '<div class="two"><div class="field"><label for="bLow">Medium starts at</label><input type="number" id="bLow" min="1.1" max="4.9" step="0.05" value="' + fmt(b.low) + '"></div>' +
       '<div class="field"><label for="bHigh">High starts at</label><input type="number" id="bHigh" min="1.2" max="5" step="0.05" value="' + fmt(b.high) + '"></div></div>' +
+      '<div class="field"><label for="bFm">Fully meets requirements at</label><input type="number" id="bFm" min="1" max="5" step="0.05" value="' + fmt(FM()) + '"></div>' +
+      '<label class="chk"><input type="checkbox" id="bAuto"' + (manual ? '' : ' checked') + '> Follow the middle of Medium automatically</label>' +
       '<div class="preview-box" id="bandMsg"></div>' +
-      '<div class="row-btns"><button type="button" class="btn btn-primary" id="bandSave">Save bands</button><button type="button" class="btn btn-ghost" id="bandReset">Back to 3.0 and 4.0</button></div>'
+      '<div class="row-btns"><button type="button" class="btn btn-primary" id="bandSave">Save bands</button><button type="button" class="btn btn-ghost" id="bandReset">Back to the defaults</button></div>'
     );
     function draw(){
-      var lo = parseFloat($('bLow').value), hi = parseFloat($('bHigh').value), ok = lo > 1 && hi > lo && hi <= 5;
-      $('bandSave').disabled = !ok;
+      var lo = parseFloat($('bLow').value), hi = parseFloat($('bHigh').value), ok = lo > 1 && hi > lo && hi <= 5, auto = $('bAuto').checked;
+      if (ok && auto) $('bFm').value = fmt(Math.round((lo + hi) / 2 * 100) / 100);
+      $('bFm').disabled = auto;
+      var fv = parseFloat($('bFm').value), fok = fv >= 1 && fv <= 5;
+      $('bandSave').disabled = !(ok && fok);
       if (!ok){ $('bandMsg').textContent = 'Medium must start above 1, and High must start above Medium and no higher than 5.'; return; }
-      var w1 = (lo - 1) / 4 * 100, w2 = (hi - lo) / 4 * 100, w3 = (5 - hi) / 4 * 100, pm = (FULLY_MEETS - 1) / 4 * 100;
+      if (!fok){ $('bandMsg').textContent = 'Fully meets must be a score between 1 and 5.'; return; }
+      var w1 = (lo - 1) / 4 * 100, w2 = (hi - lo) / 4 * 100, pm = (fv - 1) / 4 * 100;
       $('bandViz').innerHTML = '<div style="position:relative;padding-bottom:26px"><div class="scalebar">' +
         '<div class="s1" style="flex:0 0 calc(' + w1 + '% - 1px)">Low</div><div class="s2" style="flex:0 0 calc(' + w2 + '% - 2px)">Medium</div><div class="s3" style="flex:1">High</div></div>' +
         '<span style="position:absolute;top:0;left:' + pm + '%;width:2px;height:30px;background:var(--gold);border-radius:2px"></span>' +
-        '<span style="position:absolute;top:34px;left:' + pm + '%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--ink-2);white-space:nowrap">3.5 fully meets</span>' +
+        '<span style="position:absolute;top:34px;left:' + Math.min(88, Math.max(12, pm)) + '%;transform:translateX(-50%);font-size:11px;font-weight:600;color:var(--ink-2);white-space:nowrap">' + fmt(fv) + ' fully meets</span>' +
         '<span style="position:absolute;top:34px;left:0;font-size:11px;color:var(--ink-3)">1</span><span style="position:absolute;top:34px;right:0;font-size:11px;color:var(--ink-3)">5</span></div>';
-      var tc = {1:0,2:0,3:0};
-      $('bandMsg').textContent = 'Under ' + fmt(lo) + ' is Low. ' + fmt(lo) + ' up to ' + fmt(hi) + ' is Medium. ' + fmt(hi) + ' and above is High. 3.5 lands in ' + LEVEL[(3.5 < lo) ? 1 : (3.5 >= hi ? 3 : 2)] + '.';
+      var lvl = fv < lo ? 1 : (fv >= hi ? 3 : 2);
+      $('bandMsg').textContent = 'Under ' + fmt(lo) + ' is Low. ' + fmt(lo) + ' up to ' + fmt(hi) + ' is Medium. ' + fmt(hi) + ' and above is High. ' + fmt(fv) + ' (fully meets) lands in ' + LEVEL[lvl] + '.' + (lvl !== 2 ? ' That is outside Medium, so check it is what you intend.' : '');
     }
-    $('bLow').addEventListener('input', draw); $('bHigh').addEventListener('input', draw); draw();
+    ['bLow', 'bHigh', 'bFm'].forEach(function(id){ $(id).addEventListener('input', draw); });
+    $('bAuto').addEventListener('change', draw); draw();
     $('pClose').onclick = closePanel;
-    $('bandReset').onclick = function(){ $('bLow').value = DEFAULT_BANDS.low; $('bHigh').value = DEFAULT_BANDS.high; draw(); };
+    $('bandReset').onclick = function(){ $('bLow').value = DEFAULT_BANDS.low; $('bHigh').value = DEFAULT_BANDS.high; $('bAuto').checked = true; draw(); };
     $('bandSave').onclick = function(){
-      var lo = Math.round(parseFloat($('bLow').value) * 100) / 100, hi = Math.round(parseFloat($('bHigh').value) * 100) / 100;
+      var lo = Math.round(parseFloat($('bLow').value) * 100) / 100, hi = Math.round(parseFloat($('bHigh').value) * 100) / 100, fv = Math.round(parseFloat($('bFm').value) * 100) / 100;
       config.bandLow = lo; config.bandHigh = hi;
-      persistConfig(true); renderAll(); closePanel(); toast('Bands saved. The grid has been re-placed.');
+      config.fmMode = $('bAuto').checked ? 'auto' : 'manual'; config.fullyMeets = fv;
+      persistConfig(true); renderAll(); closePanel(); toast('Scoring bands saved. Every chart has been updated.');
     };
   }
 
@@ -1401,7 +1417,7 @@
     saveLocal();
     if (!db) return;
     clearTimeout(cfgTimer);
-    var go = function(){ db.doc('app/config').set({orgName:config.orgName || '', cycle:config.cycle || '', bandLow:Number(config.bandLow) || DEFAULT_BANDS.low, bandHigh:Number(config.bandHigh) || DEFAULT_BANDS.high}).catch(function(){}); };
+    var go = function(){ db.doc('app/config').set({orgName:config.orgName || '', cycle:config.cycle || '', bandLow:Number(config.bandLow) || DEFAULT_BANDS.low, bandHigh:Number(config.bandHigh) || DEFAULT_BANDS.high, fmMode:config.fmMode === 'manual' ? 'manual' : 'auto', fullyMeets:FM()}).catch(function(){}); };
     if (now) go(); else cfgTimer = setTimeout(go, 600);
   }
 
@@ -1666,7 +1682,7 @@
       }, function(){ toast('Lost the live connection. Reload to reconnect.'); });
       db.doc('app/config').onSnapshot(function(snap){
         var d = snap.exists ? (snap.data() || {}) : {};
-        config = {orgName:d.orgName || '', cycle:d.cycle || '', bandLow:d.bandLow || DEFAULT_BANDS.low, bandHigh:d.bandHigh || DEFAULT_BANDS.high};
+        config = {orgName:d.orgName || '', cycle:d.cycle || '', bandLow:d.bandLow || DEFAULT_BANDS.low, bandHigh:d.bandHigh || DEFAULT_BANDS.high, fmMode:d.fmMode === 'manual' ? 'manual' : 'auto', fullyMeets:d.fullyMeets || 3.5};
         if (document.activeElement !== $('orgInput')) $('orgInput').value = config.orgName;
         if (document.activeElement !== $('cycleInput')) $('cycleInput').value = config.cycle;
         renderLabels(); if (loaded) renderAll();
